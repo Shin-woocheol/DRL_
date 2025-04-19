@@ -40,6 +40,7 @@ class GaussianPolicy(nn.Module): #* Discrete policy와 다른 부분은, contino
             x = self.activation_func(hidden_layer(x))
         mu = self.mu_layer(x)
         log_sigma = self.log_sigma_layer(x) 
+        log_sigma = torch.clamp(log_sigma, -20, 2) #* log sigma의 범위를 제한, sigma가 너무 커지면, entropy loss가 너무 커짐.
         return mu, log_sigma.exp()
 
 class StateValue(nn.Module): #* baseline으로 사용하기 위한 state value function의 nn을 이용한 approximation

@@ -4,6 +4,7 @@ import torch
 import gymnasium as gym
 import argparse
 from collections import deque
+import imageio
 
 
 def fix_seed(seed = 777):
@@ -20,6 +21,8 @@ def evaluate(env_name, agent, seed, eval_iteration, action_type, visualize = Fal
     #현재까지 학습된 policy에 대해서, max prob을 가지는 action만을 뽑아서 평가시작.
     env = gym.make(env_name)
     scores = []
+    if visualize:
+        frames = []
     for i in range(eval_iteration): # evaluation을 위해 작동할 episodes 수
         state, _ = env.reset(seed = seed + 100 + i) # 각 evaluation마다 시작 state다를 수 있음.
         terminated, truncated, score = False, False, 0
@@ -31,9 +34,17 @@ def evaluate(env_name, agent, seed, eval_iteration, action_type, visualize = Fal
                 n_state, reward, terminated, truncated, _ = env.step(action * 2.0) # pendulum의 action sapce는 -2 to 2
             score += reward
             state = n_state
+            if visualize and i == eval_iteration - 1:
+                frame = env.render()
+                frames.append(frame)
         scores.append(score)
         if i == eval_iteration -2:
-            env = gym.make(env_name, render_mode = "human" if visualize else None)
+            env = gym.make(env_name, render_mode = "rgb_array" if visualize else None)
+
+    if visualize:
+        imageio.mimsave(f'./saved/{env_name}.gif', frames, fps=30)
+        print(f"saved gif in ./saved/{env_name}.gif")
+
     env.close()
     return round(np.mean(scores), 4) # eval time동안 얻은 return 평균내기.
 

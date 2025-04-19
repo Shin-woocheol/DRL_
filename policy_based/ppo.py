@@ -88,7 +88,7 @@ class PPO:
 
                 mu, sigma = self.policy(state)
                 normal_dist = Normal(mu, sigma)
-                action = torch.atanh(torch.clamp(action, -1.0 + 1e-7, 1.0 - 1e-7))
+                action = torch.atanh(torch.clamp(action, -1.0 + 1e-5, 1.0 - 1e-5))
                 log_probs = normal_dist.log_prob(action).sum(dim = -1, keepdim = True) #batch 별로 되어있는 차원 그대로 유지하기 위함인듯
 
                 ratio = torch.exp(log_probs - log_probs_old) #* importance ratio
@@ -102,6 +102,8 @@ class PPO:
                 self.policy_optimizer.zero_grad()
                 self.value_optimizer.zero_grad()
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=0.5)
+                torch.nn.utils.clip_grad_norm_(self.state_value.parameters(), max_norm=0.5)
                 self.policy_optimizer.step()
                 self.value_optimizer.step()
 
@@ -128,6 +130,15 @@ def main(args):
                  lr = args.lr, gamma = args.gamma, action_type=args.action_type, n_steps= args.n_steps,
                  n_epochs = args.n_epochs, lambda_ = args.lambda_, clip_ratio = args.clip_ratio, 
                  vf_coef = args.vf_coef, ent_coef = args.ent_coef)
+    if args.test:
+        # print(f"Loading model from {args.load_path}")
+        agent.policy.load_state_dict(torch.load(f"./saved/best_{args.env_name}_{args.model}.pth", map_location=agent.device)) # agent act만 구해주면 되니까 poolicy만 load해주면 됨.
+        agent.policy.eval()
+
+        score = evaluate(args.env_name, agent, args.seed, args.eval_iteration, args.action_type, args.visualize)
+        print(f"[TEST MODE] Evaluation return: {score}")
+        return  # test만 하고 종료
+
 
     state, _ = env.reset(seed = args.seed)  # 각 evaluation마다 시작 state다를 수 있음.
     terminated, truncated = False, False
@@ -158,6 +169,7 @@ def main(args):
             score = evaluate(args.env_name, agent, args.seed, args.eval_iteration, args.action_type, args.visualize)
             print(f"time : {t},eval Avg return : {score}")
             if score > best_score:
+                best_score = score
                 torch.save(agent.policy.state_dict(), f"./saved/best_{args.env_name}_{args.model}.pth")
             if args.wandb:
                 wandb.log({
@@ -187,6 +199,7 @@ if __name__ == '__main__':
     parser.add_argument('--clip_ratio', type = float, default = 0.2)
     parser.add_argument('--vf_coef', type = float, default = 1.0)
     parser.add_argument('--ent_coef', type = float, default = 0.01)
+    parser.add_argument('--test', action='store_true')
 
     args = parser.parse_args()
 
@@ -200,3 +213,4 @@ if __name__ == '__main__':
 
 # export CUDA_VISIBLE_DEVICES=1
 # python ppo.py --wandb True
+# python ppo.py --test --visualize True
